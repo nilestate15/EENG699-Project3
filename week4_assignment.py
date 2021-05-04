@@ -16,7 +16,7 @@ def C_A_sig(f_0, f_s, t_max):
     chip_num = np.floor(time_array * f_chip).astype('int')
 
     # Carrier frequency
-    carr_freq = np.cos(2*np.pi*f_0*time_array)
+    carr_freq = np.sin(2*np.pi*f_0*time_array)
 
     # Generate Sampling of PRN codes
     prn_code = np.random.randint(2, size=len(chip_num))
@@ -91,7 +91,7 @@ def P_Y_sig(f_0, f_s, t_max):
     chip_num = np.floor(time_array * f_chip).astype('int')
 
     # Carrier frequency
-    carr_freq = np.cos(2*np.pi*f_0*time_array)
+    carr_freq = np.sin(2*np.pi*f_0*time_array)
 
     # Generate Sampling of PRN codes
     prn_code = np.random.randint(2, size=len(chip_num))
@@ -153,51 +153,51 @@ def M_C_A_sig(f_0, f_s, t_max):
     m_freq = 10 * 1023000
 
     # Time vector generation
-    time_array = np.arange(0, t_max, 1/m_freq)
+    time_array = np.arange(0, t_max, 1/f_s)
+
+    # Carrier
+    carrier = np.sin(2*np.pi*f_0 * time_array)
 
     # Square wave
-    square_freq = sig.square(2*np.pi*f_0*time_array)
-
-    # Calculate chip number
-    chip_num = np.floor(time_array * f_chip).astype('int')
+    BOC_subc = np.array([1.0, -1.0])
+    BOC_subc_num = np.mod(np.floor(time_array * 2*m_freq).astype('int'), 2)
+    sampled_BOC_subc = BOC_subc[BOC_subc_num]
 
     # Generate Sampling of PRN codes
-    prn_code = np.random.randint(2, size=len(chip_num))
-    prn_code[prn_code == 0] = -1
-
-    prn_sampled = prn_code[chip_num]
+    BOC_chips = -2.0 * np.round(np.random.rand(int(np.ceil(f_chip * t_max)))) + 1
+    BOC_chip_num = np.floor(time_array * f_chip).astype('int')
+    sampled_BOC_chip = BOC_chips[BOC_chip_num]
 
     # M-code (modulation of prn onto square wave)
-    m_code = square_freq * prn_sampled
+    carrier_BOC = carrier * sampled_BOC_subc * sampled_BOC_chip
 
-    return m_code
+    return carrier_BOC
 
-def M_pwr_spec(m_c, t_max, mod_sig):
+def M_pwr_spec(f_s, t_max, mod_sig):
     '''Function calculates the power spectral density (PSD)
-    Inputs: m_c (M_code freq), t_max (length of sampled data to simulate), mod_sig (PY code modulated onto the carrier)
+    Inputs: f_s (sample freq), t_max (length of sampled data to simulate), mod_sig (PY code modulated onto the carrier)
     Output: an array of the spectral density (PSD)'''
 
      # Time vector generation
-    time_array = np.arange(0, t_max, 1/m_c)
+    time_array = np.arange(0, t_max, 1/f_s)
+    N = 500
 
     # Normalized FFT output of the signals
-    fft_signal_mod = np.fft.fft(mod_sig)/len(mod_sig)
-    fft_signal_mod = abs(fft_signal_mod[range(int(len(mod_sig)/2))])
+    fft_carrier_BOC = np.fft.fft(mod_sig)/len(mod_sig)  # normalize by length
+    fft_carrier_BOC = abs(fft_carrier_BOC[range(int(len(mod_sig)/2))])
+    filt_fft_carrier_BOC = sig.filtfilt(np.ones(N), 1, fft_carrier_BOC)  # window filter
+
 
     # Frequency Axis
     len_time = len(time_array)
     values = np.arange(int(len_time/2))
-    time_period = len_time / m_c
+    time_period = len_time / f_s
     freq_axis = values / time_period
-
-    # Filtered FFT output for M code modulated
-    N = 500
-    fft_filtered_mod = sig.filtfilt(np.ones(N), 1, fft_signal_mod)
 
     # Plotting Spectral Density M code
     plt.figure()
     plt.title('Spectral Density M code signal')
-    plt.plot(freq_axis, fft_filtered_mod, marker = '.', markersize = 5)
+    plt.plot(freq_axis, filt_fft_carrier_BOC, marker = '.', markersize = 5)
     plt.legend(['PSD M code'])
     plt.xlabel('Freq (Hz)')
     plt.ylabel('Power')
@@ -222,19 +222,19 @@ if __name__ == "__main__":
     carrier_sig, CA_sig = C_A_sig(cent_freq, samp_freq, t_max)
 
     # Calculate Power Spectral Density for C/A Code and plot
-    # CA_pwr_spec(samp_freq, t_max, carrier_sig, CA_sig)
+    CA_pwr_spec(samp_freq, t_max, carrier_sig, CA_sig)
 
     # Generate Simulated P(Y) Code Signal
-    # PY_sig = P_Y_sig(cent_freq, samp_freq, t_max)
+    PY_sig = P_Y_sig(cent_freq, samp_freq, t_max)
 
     # Calculate Power Spectral Density for P(Y) Code and plot
-    # PY_pwr_spec(samp_freq, t_max, PY_sig)
+    PY_pwr_spec(samp_freq, t_max, PY_sig)
 
     ## For M code
     # Generate Simulated C/A Code Signal
     M_sig = M_C_A_sig(cent_freq, samp_freq, t_max)
 
     # Calculate Power Spectral Density for P(Y) Code and plot
-    M_pwr_spec(m_freq, t_max, M_sig)
+    M_pwr_spec(samp_freq, t_max, M_sig)
 
 
